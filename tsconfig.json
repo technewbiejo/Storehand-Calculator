@@ -5,7 +5,13 @@
     "paths": {
       "@/*": [
         "./*"
-      ]
+      ],
+      "types": ["expo"],
+      "strict": true,
+      "target": "esnext",
+      "moduleResolution": "node",
+      "jsx": "react-native"
+
     }
   },
   "include": [

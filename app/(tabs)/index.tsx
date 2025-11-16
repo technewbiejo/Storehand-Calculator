@@ -16,7 +16,7 @@ export default function CalculatorScreen() {
     const { handleCalculate } = useAppContext();
     const params = useLocalSearchParams<{ initialState?: string }>();
 
-    const alphaNumeric = (s: string) => s.replace(/[^0-9A-Za-z]/g, '');
+
 
     const [itemId, setItemId] = useState('');
     const [quantityWanted, setQuantityWanted] = useState('');
@@ -76,10 +76,12 @@ export default function CalculatorScreen() {
                     <View className={cls.form.group}>
                         <InputGroup
                             label="Item ID / Part No."
-                            value={itemId}
-                            onChangeText={(t) => setItemId(alphaNumeric(t).toUpperCase())}
+                            value={itemId.toUpperCase()}      // 👈 display as UPPERCASE
                             placeholder="e.g., SKU-12345"
+                            autoCapitalize="characters"
+                            onChangeText={setItemId}
                             keyboardType="default"
+
                         />
                         <InputGroup
                             label="Quantity Wanted"
