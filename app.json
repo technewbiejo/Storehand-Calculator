@@ -2,6 +2,15 @@
   "expo": {
     "name": "ERoom Calculator",
     "slug": "storehandCalculator",
+    "splash": {
+      "image": "./assets/images/storehandLogo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#131321",
+      "dark": {
+        "image": "./assets/images/storehandLogo.png",
+        "backgroundColor": "#131321"
+      }
+    },
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/storehandLogo.png",
@@ -14,9 +23,9 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/storehandLogo.png",
+        "backgroundImage": "./assets/images/storehandLogo.png",
+        "monochromeImage": "./assets/images/storehandLogo.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

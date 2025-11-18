@@ -29,6 +29,7 @@ export interface HistoryEntry {
 }
 
 export interface CalculatorState {
+    id?: number;
     itemId: string;
     quantityWanted: string;
     quantityPerItem: string;

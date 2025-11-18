@@ -1,20 +1,11 @@
-import React, {
-    createContext,
-    useState,
-    useCallback,
-    useContext,
-    useEffect,
-} from 'react';
+import React, { createContext, useState, useCallback, useContext } from 'react';
 import { Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
     LooseItem,
     Calculation,
     HistoryEntry,
     CalculatorState,
-} from './../types';
-
-const HISTORY_STORAGE_KEY = '@calculator_history_v1';
+} from '../types';
 
 interface AppContextType {
     result: Calculation | null;
@@ -34,47 +25,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     const [result, setResult] = useState<Calculation | null>(null);
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [lastItemId, setLastItemId] = useState('');
-    const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
-
-    // 🔹 Load history from storage when app starts
-    useEffect(() => {
-        const loadHistory = async () => {
-            try {
-                const stored = await AsyncStorage.getItem(HISTORY_STORAGE_KEY);
-                if (stored) {
-                    const parsed: HistoryEntry[] = JSON.parse(stored);
-                    setHistory(parsed);
-                }
-            } catch (error) {
-                console.warn('Failed to load history from storage', error);
-            } finally {
-                setIsHistoryLoaded(true);
-            }
-        };
-
-        loadHistory();
-    }, []);
-
-    // 🔹 Save history to storage whenever it changes
-    useEffect(() => {
-        if (!isHistoryLoaded) return;
-
-        const saveHistory = async () => {
-            try {
-                await AsyncStorage.setItem(
-                    HISTORY_STORAGE_KEY,
-                    JSON.stringify(history)
-                );
-            } catch (error) {
-                console.warn('Failed to save history to storage', error);
-            }
-        };
-
-        saveHistory();
-    }, [history, isHistoryLoaded]);
 
     const handleCalculate = useCallback((inputs: CalculatorState) => {
         const {
+            id, // may be undefined for new calc
             itemId,
             quantityWanted,
             quantityPerItem,
@@ -83,13 +37,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         } = inputs;
 
         const wanted = parseInt(quantityWanted, 10);
-        const perItem = parseInt(quantityPerItem, 10);
-
         let remainingQtyNeeded = wanted;
+
+        // --- Loose items first ---
         const looseItemsUsed: { originalQty: number; takenQty: number }[] = [];
         const looseItemsBreakdown: string[] = [];
 
-        // Sort loose items from smallest to largest usable quantity
         const sortedLooseItems = [...looseItems]
             .map((item) => ({
                 ...item,
@@ -98,7 +51,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             .filter((item) => item.quantity > 0)
             .sort((a, b) => a.quantity - b.quantity);
 
-        // Use loose items first
         for (const looseItem of sortedLooseItems) {
             if (remainingQtyNeeded <= 0) break;
             const qtyToTake = Math.min(remainingQtyNeeded, looseItem.quantity);
@@ -110,37 +62,76 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             remainingQtyNeeded -= qtyToTake;
         }
 
+        // --- multiple pack sizes (or none) ---
+        // "quantityPerItem" can be:
+        // - ""  (no standard pack)
+        // - "0" (explicitly rely on loose pack)
+        // - "500"
+        // - "500,389,272"
+        const packSizes = quantityPerItem
+            .split(',')
+            .map((s) => parseInt(s.trim(), 10))
+            .filter((n) => !isNaN(n) && n > 0);
+
         let fullItems = 0;
         const fullItemsBreakdown: string[] = [];
         const remainderBreakdown: string[] = [];
         let fulfilledFromInventory = 0;
 
-        // Then use full items
-        if (remainingQtyNeeded > 0) {
+        if (remainingQtyNeeded > 0 && packSizes.length > 0) {
+            const sortedPacks = [...packSizes].sort((a, b) => b - a); // big → small
+            const packUsage: { size: number; count: number }[] = [];
+            let needed = remainingQtyNeeded;
+
             if (calculateExactRemainder) {
-                const numFullItems = Math.floor(remainingQtyNeeded / perItem);
-                if (numFullItems > 0) {
-                    fullItemsBreakdown.push(
-                        `${numFullItems.toLocaleString()} x ${perItem.toLocaleString()}`
-                    );
+                // No over-supply: use as many packs as possible, keep remainder
+                for (const size of sortedPacks) {
+                    if (needed <= 0) break;
+                    const count = Math.floor(needed / size);
+                    if (count > 0) {
+                        packUsage.push({ size, count });
+                        needed -= count * size;
+                    }
                 }
-                const remainder = remainingQtyNeeded % perItem;
-                if (remainder > 0) {
+
+                if (needed > 0) {
                     remainderBreakdown.push(
-                        `(Remainder) 1 x ${remainder.toLocaleString()}`
+                        `(Remainder) 1 x ${needed.toLocaleString()}`
                     );
                 }
-                fullItems = numFullItems;
+
+                // Keep same behaviour as your old code:
+                // treat remaining quantity as "fulfilled from inventory"
                 fulfilledFromInventory = remainingQtyNeeded;
             } else {
-                const numFullItems = Math.ceil(remainingQtyNeeded / perItem);
-                if (numFullItems > 0) {
-                    fullItemsBreakdown.push(
-                        `${numFullItems.toLocaleString()} x ${perItem.toLocaleString()}`
-                    );
+                // Allow over-supply: cover at least the remaining quantity
+                for (const size of sortedPacks) {
+                    if (needed <= 0) break;
+                    const count = Math.floor(needed / size);
+                    if (count > 0) {
+                        packUsage.push({ size, count });
+                        needed -= count * size;
+                    }
                 }
-                fullItems = numFullItems;
-                fulfilledFromInventory = numFullItems * perItem;
+
+                if (needed > 0) {
+                    const smallest = sortedPacks[sortedPacks.length - 1];
+                    const extraCount = Math.ceil(needed / smallest);
+                    packUsage.push({ size: smallest, count: extraCount });
+                    needed -= extraCount * smallest;
+                }
+
+                fulfilledFromInventory = packUsage.reduce(
+                    (sum, p) => sum + p.size * p.count,
+                    0
+                );
+            }
+
+            fullItems = packUsage.reduce((sum, p) => sum + p.count, 0);
+            for (const p of packUsage) {
+                fullItemsBreakdown.push(
+                    `${p.count.toLocaleString()} x ${p.size.toLocaleString()}`
+                );
             }
         }
 
@@ -165,8 +156,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setResult(calculationResult);
         setLastItemId(itemId);
 
-        const newHistoryEntry: HistoryEntry = {
-            id: Date.now(),
+        const entryId = id ?? Date.now(); // reuse id when editing
+
+        const updatedEntry: HistoryEntry = {
+            id: entryId,
             itemId,
             quantityWanted,
             quantityPerItem,
@@ -176,12 +169,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             timestamp: new Date().toLocaleString(),
         };
 
-        setHistory((prev) => [newHistoryEntry, ...prev]);
+        setHistory((prev) =>
+            id == null
+                ? [updatedEntry, ...prev] // new → add
+                : prev.map((h) => (h.id === id ? updatedEntry : h)) // edit → replace
+        );
     }, []);
 
-    // Navigation is done in HistoryScreen; this just exists for typing API
-    const handleRerun = (entry: HistoryEntry) => {
-        // no-op here; History screen uses the data to navigate with params
+    const handleRerun = (_entry: HistoryEntry) => {
+        // navigation is handled in HistoryScreen
     };
 
     const handleDeleteHistory = useCallback((id: number) => {
@@ -197,14 +193,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
                 {
                     text: 'Clear',
                     style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            setHistory([]);
-                            await AsyncStorage.removeItem(HISTORY_STORAGE_KEY);
-                        } catch (error) {
-                            console.warn('Failed to clear history', error);
-                        }
-                    },
+                    onPress: () => setHistory([]),
                 },
             ]
         );

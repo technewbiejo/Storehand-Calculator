@@ -82,7 +82,8 @@ export const cls = {
 
     // Buttons
     btn: {
-        primary: `w-full bg-[#e9204f] rounded-lg py-4 shadow-lg`,
+        primary: `w-full bg-[#e9204f] rounded-lg py-4 shadow-lg `,
+        primary1: `w-full bg-[#1b1b1b] rounded-lg py-4 shadow-lg `,
         primaryText: `text-white text-center font-bold text-base`,
         secondary: `flex-row items-center gap-1.5 text-red px-3 py-2 rounded-lg`,
         secondaryText: `text-sm text-black font-semibold`,

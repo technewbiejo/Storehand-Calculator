@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -7,30 +6,62 @@ import { useAppContext } from '../../context/AppContext';
 import { cls, Card, colors } from '../theme';
 import type { Calculation } from '../../types';
 
-const ResultDisplay: React.FC<{ result: Calculation; itemId: string }> = ({ result, itemId }) => {
+const ResultDisplay: React.FC<{ result: Calculation; itemId: string }> = ({
+                                                                              result,
+                                                                              itemId,
+                                                                          }) => {
+    const isUnder = result.totalFulfilled < result.requested;
+    const shortBy =
+        isUnder ? result.requested - result.totalFulfilled : 0;
+
     return (
         <Card>
             <View className={cls.result.header}>
                 <Text className={cls.cardTitle}>Calculation Result</Text>
                 <Text className={cls.result.subtitle}>
-                    Item ID: <Text className={cls.result.itemId}>{itemId || 'N/A'}</Text>
+                    Item ID:{' '}
+                    <Text className={cls.result.itemId}>
+                        {itemId || 'N/A'}
+                    </Text>
                 </Text>
             </View>
             <View className="space-y-4">
                 <View className={cls.result.row}>
                     <Text className={cls.result.label}>Requested:</Text>
-                    <Text className={`${cls.result.value} text-blue-600`}>{result.requested.toLocaleString()}</Text>
+                    <Text
+                        className={`${cls.result.value} ${
+                            isUnder ? 'text-red-600' : 'text-blue-600'
+                        }`}
+                    >
+                        {result.requested.toLocaleString()}
+                    </Text>
                 </View>
                 <View className={cls.result.row}>
                     <Text className={cls.result.label}>Total Fulfilled:</Text>
-                    <Text className={`${cls.result.value} ${result.totalFulfilled < result.requested ? 'text-orange-600' : 'text-green-600'}`}>
+                    <Text
+                        className={`${cls.result.value} ${
+                            isUnder ? 'text-red-600' : 'text-green-600'
+                        }`}
+                    >
                         {result.totalFulfilled.toLocaleString()}
                     </Text>
                 </View>
-                <View className="border-t border-slate-200 my-3"/>
+
+                {isUnder && (
+                    <Text className="text-sm font-semibold text-red-600">
+                        Not fully fulfilled. Short by{' '}
+                        {shortBy.toLocaleString()}.
+                    </Text>
+                )}
+
+                <View className="border-t border-slate-200 my-3" />
                 <View className={cls.result.row}>
-                    <Text className={cls.result.label}>Full Items to Give:</Text>
-                    <Text className={cls.result.valueLg}>{result.fullItems.toLocaleString()}</Text>
+                    <Text className={cls.result.label}>
+                        Full Items to Give:
+                    </Text>
+                    <Text className={cls.result.valueLg}>
+                        {result.fullItems.toLocaleString()}
+                    </Text>
                 </View>
 
                 {result.breakdown.length > 0 && (
@@ -50,9 +81,15 @@ export default function ResultScreen() {
     const { result, lastItemId } = useAppContext();
 
     return (
-        <ScrollView className={cls.screen} contentContainerStyle={{ padding: 16 }}>
+        <ScrollView
+            className={cls.screen}
+            contentContainerStyle={{ padding: 16 }}
+        >
             <View className={cls.container}>
-                <TouchableOpacity onPress={() => router.back()} className={cls.btn.link}>
+                <TouchableOpacity
+                    onPress={() => router.back()}
+                    className={cls.btn.link}
+                >
                     <ArrowLeft size={25} color={colors.textSecondary} />
                     <Text className={cls.btn.linkText}>Return </Text>
                 </TouchableOpacity>
@@ -61,9 +98,16 @@ export default function ResultScreen() {
                 ) : (
                     <Card>
                         <View className={cls.history.emptyContainer}>
-                            <Archive size={48} color={colors.placeholder} />
-                            <Text className={cls.history.emptyTitle}>No Result to Display</Text>
-                            <Text className={cls.history.emptySubtitle}>Run a calculation on the 'Calculator' tab.</Text>
+                            <Archive
+                                size={48}
+                                color={colors.placeholder}
+                            />
+                            <Text className={cls.history.emptyTitle}>
+                                No Result to Display
+                            </Text>
+                            <Text className={cls.history.emptySubtitle}>
+                                Run a calculation on the 'Calculator' tab.
+                            </Text>
                         </View>
                     </Card>
                 )}
