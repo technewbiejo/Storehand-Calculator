@@ -1,5 +1,12 @@
-import React, { createContext, useState, useCallback, useContext } from 'react';
+import React, {
+    createContext,
+    useState,
+    useCallback,
+    useContext,
+    useEffect,
+} from 'react';
 import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
     LooseItem,
     Calculation,
@@ -19,16 +26,54 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const HISTORY_STORAGE_KEY = '@storehand_history_v1';
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
                                                                          children,
                                                                      }) => {
     const [result, setResult] = useState<Calculation | null>(null);
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [lastItemId, setLastItemId] = useState('');
+    const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
+
+    // 🔹 Load history once when app starts
+    useEffect(() => {
+        const loadHistory = async () => {
+            try {
+                const stored = await AsyncStorage.getItem(HISTORY_STORAGE_KEY);
+                if (stored) {
+                    const parsed: HistoryEntry[] = JSON.parse(stored);
+                    setHistory(parsed);
+                }
+            } catch (err) {
+                console.warn('Failed to load history from storage', err);
+            } finally {
+                setIsHistoryLoaded(true);
+            }
+        };
+
+        loadHistory();
+    }, []);
+
+    // 🔹 Save history whenever it changes (after initial load)
+    useEffect(() => {
+        if (!isHistoryLoaded) return;
+        const saveHistory = async () => {
+            try {
+                await AsyncStorage.setItem(
+                    HISTORY_STORAGE_KEY,
+                    JSON.stringify(history)
+                );
+            } catch (err) {
+                console.warn('Failed to save history to storage', err);
+            }
+        };
+        saveHistory();
+    }, [history, isHistoryLoaded]);
 
     const handleCalculate = useCallback((inputs: CalculatorState) => {
         const {
-            id, // may be undefined for new calc
+            id, // optional: if present, update existing history entry
             itemId,
             quantityWanted,
             quantityPerItem,
@@ -63,11 +108,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         // --- multiple pack sizes (or none) ---
-        // "quantityPerItem" can be:
-        // - ""  (no standard pack)
-        // - "0" (explicitly rely on loose pack)
-        // - "500"
-        // - "500,389,272"
+        // quantityPerItem can be "", "0", "500" or "500,389,272"
         const packSizes = quantityPerItem
             .split(',')
             .map((s) => parseInt(s.trim(), 10))
@@ -100,8 +141,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
                     );
                 }
 
-                // Keep same behaviour as your old code:
-                // treat remaining quantity as "fulfilled from inventory"
+                // For your app we still treat remainingQtyNeeded as fulfilled from inventory
                 fulfilledFromInventory = remainingQtyNeeded;
             } else {
                 // Allow over-supply: cover at least the remaining quantity
@@ -156,7 +196,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setResult(calculationResult);
         setLastItemId(itemId);
 
-        const entryId = id ?? Date.now(); // reuse id when editing
+        const entryId = id ?? Date.now(); // reuse same id when editing
 
         const updatedEntry: HistoryEntry = {
             id: entryId,
@@ -171,13 +211,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
         setHistory((prev) =>
             id == null
-                ? [updatedEntry, ...prev] // new → add
+                ? [updatedEntry, ...prev] // new → add to top
                 : prev.map((h) => (h.id === id ? updatedEntry : h)) // edit → replace
         );
     }, []);
 
     const handleRerun = (_entry: HistoryEntry) => {
-        // navigation is handled in HistoryScreen
+        // navigation handled in screens via router + params
     };
 
     const handleDeleteHistory = useCallback((id: number) => {
@@ -193,7 +233,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
                 {
                     text: 'Clear',
                     style: 'destructive',
-                    onPress: () => setHistory([]),
+                    onPress: async () => {
+                        try {
+                            setHistory([]);
+                            await AsyncStorage.removeItem(HISTORY_STORAGE_KEY);
+                        } catch (err) {
+                            console.warn('Failed to clear history from storage', err);
+                        }
+                    },
                 },
             ]
         );

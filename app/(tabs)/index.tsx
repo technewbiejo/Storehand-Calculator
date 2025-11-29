@@ -137,6 +137,7 @@ export default function CalculatorScreen() {
                             value={itemId.toUpperCase()}
                             onChangeText={t => setItemId(t.toUpperCase())}
                             placeholder="e.g., SKU-12345"
+                            autoCapitalize="characters"
                             keyboardType="default"
                         />
 
